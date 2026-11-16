@@ -143,6 +143,16 @@ app.post('/api/transfers', async (req, res) => {
   }
 });
 
+app.get('/', (req, res) => {
+  res.status(200).json({
+    service: 'FinTech Real-Time Ledger API',
+    status: 'Online',
+    endpoints: {
+      accounts: '/api/accounts',
+      transfers: '/api/transfers'
+    }
+  });
+});
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 FinTech Real-Time Ledger rodando na porta ${PORT}`);
