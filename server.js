@@ -3,10 +3,12 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Configuração do Pool de Conexões PostgreSQL
 const pool = new Pool({
@@ -143,16 +145,6 @@ app.post('/api/transfers', async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => {
-  res.status(200).json({
-    service: 'FinTech Real-Time Ledger API',
-    status: 'Online',
-    endpoints: {
-      accounts: '/api/accounts',
-      transfers: '/api/transfers'
-    }
-  });
-});
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`🚀 FinTech Real-Time Ledger rodando na porta ${PORT}`);

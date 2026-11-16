@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinTech Real-Time Ledger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+  <div class="max-w-5xl mx-auto px-4 py-10">
+    
+    <!-- Cabeçalho -->
+    <header class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-6 mb-8 gap-4">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="h-3 w-3 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Production Ledger Engine</span>
+        </div>
+        <h1 class="text-3xl font-bold text-white mt-1">FinTech Real-Time Ledger</h1>
+        <p class="text-slate-400 text-sm mt-1">Double-entry financial core • ACID transactions • Idempotency protection</p>
+      </div>
+      <button onclick="loadData()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-4 py-2 rounded-lg border border-slate-700 transition self-start sm:self-auto">
+        ↻ Atualizar Saldos
+      </button>
+    </header>
+
+    <!-- Cards das Contas -->
+    <section class="mb-10">
+      <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-400 mb-4">Contas Ativas (PostgreSQL / Neon)</h2>
+      <div id="accounts-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6 animate-pulse">
+          <div class="h-4 bg-slate-800 rounded w-1/3 mb-4"></div>
+          <div class="h-8 bg-slate-800 rounded w-1/2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Formulário de Transferência -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+      <h2 class="text-lg font-semibold text-white mb-1">Executar Liquidação / Transferência</h2>
+      <p class="text-slate-400 text-sm mb-6">Operação atômica com chave de idempotência automática para evitar cobrança duplicada.</p>
+
+      <form id="transfer-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-400 uppercase mb-1">Conta de Origem (Débito)</label>
+          <select id="fromAccount" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 uppercase mb-1">Conta de Destino (Crédito)</label>
+          <select id="toAccount" required class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 uppercase mb-1">Valor (BRL)</label>
+          <input type="number" id="amount" step="0.01" min="0.01" placeholder="Ex: 250.00" required
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-400 uppercase mb-1">Descrição / Memo</label>
+          <input type="text" id="description" placeholder="Ex: Merchant settlement batch #42" required
+            class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+        </div>
+
+        <div class="md:col-span-2 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div id="feedback" class="text-sm font-medium"></div>
+          <button type="submit" id="submit-btn"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-6 py-2.5 rounded-lg transition shadow-lg shadow-emerald-950/50 cursor-pointer">
+            Confirmar Transferência
+          </button>
+        </div>
+      </form>
+    </section>
+
+  </div>
+
+  <script>
+    let accountsList = [];
+
+    function formatCurrency(val) {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val));
+    }
+
+    async function loadData() {
+      const grid = document.getElementById('accounts-grid');
+      try {
+        const res = await fetch('/api/accounts');
+        accountsList = await res.json();
+
+        grid.innerHTML = accountsList.map(acc => `
+          <div class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-xl p-6 transition">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <h3 class="font-semibold text-lg text-white">${acc.owner_name}</h3>
+                <span class="text-xs font-mono text-slate-400">Conta: ${acc.account_number}</span>
+              </div>
+              <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                ${acc.status}
+              </span>
+            </div>
+            <div class="mt-4">
+              <span class="text-xs text-slate-500 uppercase tracking-wider">Saldo Disponível</span>
+              <p class="text-3xl font-bold text-white tracking-tight mt-0.5">${formatCurrency(acc.balance)}</p>
+            </div>
+            <p class="text-[11px] font-mono text-slate-600 mt-4 truncate">ID: ${acc.id}</p>
+          </div>
+        `).join('');
+
+        populateSelects();
+      } catch (err) {
+        grid.innerHTML = `<p class="text-rose-400 text-sm">Erro ao carregar contas: ${err.message}</p>`;
+      }
+    }
+
+    function populateSelects() {
+      const fromSelect = document.getElementById('fromAccount');
+      const toSelect = document.getElementById('toAccount');
+      const options = accountsList.map(acc => 
+        `<option value="${acc.id}">${acc.owner_name} (${acc.account_number}) — ${formatCurrency(acc.balance)}</option>`
+      ).join('');
+      
+      fromSelect.innerHTML = options;
+      toSelect.innerHTML = options;
+      if (accountsList.length > 1) {
+        toSelect.selectedIndex = 1;
+      }
+    }
+
+    document.getElementById('transfer-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('submit-btn');
+      const feedback = document.getElementById('feedback');
+      
+      const fromAccountId = document.getElementById('fromAccount').value;
+      const toAccountId = document.getElementById('toAccount').value;
+      const amount = parseFloat(document.getElementById('amount').value);
+      const description = document.getElementById('description').value;
+
+      if (fromAccountId === toAccountId) {
+        feedback.className = 'text-sm font-medium text-amber-400';
+        feedback.textContent = 'Selecione contas diferentes para origem e destino.';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Processando liquidação...';
+      feedback.textContent = '';
+
+      try {
+        const idempotencyKey = 'web-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+        const res = await fetch('/api/transfers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey
+          },
+          body: JSON.stringify({ fromAccountId, toAccountId, amount, description })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Falha na transferência');
+        }
+
+        feedback.className = 'text-sm font-medium text-emerald-400';
+        feedback.textContent = `✓ Transferência de ${formatCurrency(amount)} liquidada com sucesso!`;
+        document.getElementById('amount').value = '';
+        document.getElementById('description').value = '';
+        await loadData();
+      } catch (err) {
+        feedback.className = 'text-sm font-medium text-rose-400';
+        feedback.textContent = `✕ Erro: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar Transferência';
+      }
+    });
+
+    loadData();
+  </script>
+</body>
+</html>
